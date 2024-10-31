@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
-import axios from 'axios'
 import Filter from './components/Filter'
-import PersonForm  from './components/PersonForm'
+import PersonForm from './components/PersonForm'
 import Persons from './components/Persons'
+import personService from './services/persons'
 
 const App = () => {
   const [persons, setPersons] = useState([])
@@ -12,15 +12,11 @@ const App = () => {
   const [showAll, setShowAll] = useState(true)
 
   useEffect(() => {
-    console.log('effect')
-
-    const eventHandler = response => {
-      console.log('promise fulfilled')
-      setPersons(response.data)
-    }
-
-    const promise = axios.get('http://localhost:3001/persons')
-    promise.then(eventHandler)
+    personService
+      .getAll()
+      .then(initialPersons => {
+        setPersons(initialPersons)
+      })
   }, [])
 
   const handleNameChange = (event) => {
@@ -30,17 +26,45 @@ const App = () => {
     setNewNumber(event.target.value)
   }
 
+  const handleDeleteEntry = id => {
+    const nameToDelete = persons.filter(p => p.id === id)
+    const message = `Delete ${nameToDelete[0].name} ?`
+    if (confirm(message)) {
+      personService
+        .deleteEntry(id)
+        .then(
+          setPersons(persons.filter(p => p.id !== id))
+        )
+    }
+  }
+
   const addPerson = (event) => {
     event.preventDefault()
     const personObject = {
       name: newName,
       number: newNumber
     }
-    let nameExists = persons.find(person => personObject.name === person.name)
-    nameExists === undefined ?
-      setPersons(persons.concat(personObject)) :
-      alert(`${personObject.name} is already in the phonebook!`)
+
+    let nameExists = persons.filter(person => personObject.name === person.name)
+
+    if (nameExists === undefined) {
+      personService
+        .create(personObject)
+        .then(returnedPersons => {
+          setPersons(persons.concat(returnedPersons))
+        })
+    } else {
+      const message = `${personObject.name} is already added to phonebook, replace the old number with a new one?`
+      if (confirm(message)) {
+        personService
+          .update(nameExists[0].id, personObject)
+          .then(returnedPerson => {
+            setPersons(persons.map(person => person.id === nameExists[0].id ? returnedPerson : person))
+          })
+      }
+    }
     setNewName('')
+    setNewNumber('')
   }
 
   const handleFilterChange = (event) => {
@@ -59,13 +83,13 @@ const App = () => {
   return (
     <div>
       <h2>Phonebook</h2>
-      <Filter 
+      <Filter
         adding={addFilter}
         filter={newFilter}
-        handleFilter={handleFilterChange}/>
+        handleFilter={handleFilterChange} />
 
       <h2>Add a new</h2>
-      <PersonForm 
+      <PersonForm
         adding={addPerson}
         personName={newName}
         handleName={handleNameChange}
@@ -77,7 +101,8 @@ const App = () => {
         <Persons
           key={person.name}
           name={person.name}
-          number={person.number} />
+          number={person.number}
+          handleDelete={() => handleDeleteEntry(person.id)} />
       )}
 
     </div>
